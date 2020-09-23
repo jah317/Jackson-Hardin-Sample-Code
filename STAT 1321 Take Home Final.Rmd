@@ -1,0 +1,285 @@
+---
+title: "STAT 1321 Take Home Final"
+author: "Jackson Hardin"
+date: "12/1/2019"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Problem 1
+##PART A
+```{r}
+library(astsa)
+library(xts)
+par(mfrow=c(2,1))
+tsplot(sales)
+tsplot(diff(sales))
+acf2(diff(sales))
+```
+
+A) Upon initial examination of the data, we can see that the data seems to have a positive trend over time, but does not appear to have any sort of obvious cyclic behavior. The expected value over time is definitively not equal to zero, so this data is easily not going to be stationary at first glance.
+
+B) Upon differencing the data once, we can see that the expected value over time seems to flatten out quite a bit, and while it is not likely going to be exactly zero, will be close. We do not want to difference the data again because that risks introducting cross correlation into the data set. We will stick with the single order difference because the differenced data appears to resemble white noise.
+
+C) Upon examination of the differenced sales data, we can see that the graph of the ACF values seem to trail off as the lags increase. This suggests that the order for the moving average portion of our model to be zero. Looking at the PACF for the lagged values, we see that the graph cuts off after about 2 lags. One could also evaluate the viability of a model with a autoregressive portion of 1 order as well as two, as the second lag seems to be at right about the significance line. We can judge both a (1,1,0) and (2,1,0) and decide on which we think is more appropriate.
+
+D) As mentioned above, we will test the parameter of the model with both a 1 and 2 order autoregressive component. This is to explore the possibility that the second lag could be close enough to the significance line to give us favorable diagnostics, while also retaining a simpler model. For the difference component, we will use the original sales dataset and instead use a differencing order of 1. For the moving average component of our model, we will keep that at order 1 since we see that the ACF trails off as the lags increase, suggesting an MA(1) component.
+
+```{r}
+library(astsa)
+sales.arima1 <- sarima(sales, 1,1,0)
+sales.arima1
+```
+
+E) For the (1,1,0) model, we see that the graph of the standardized residuals looks to be favorable, and the ACF of residuals shows some slight crosscorrelation. While this may not be a super positive sign, we will continue to evaluate the rest of the model for what it's worth. The p values for the Ljung-Box statistic appear to not be favorable, however, as the p values are all noticably pretty low and roughly equivalent. The ar1 coefficient is statistically significant. This model contains an AIC value of 3.504287 and a BIC value of 3.564769. We will keep these for comparison to the other model.
+
+```{r}
+sales.arima2 <- sarima(sales, 2,1,0)
+sales.arima2
+```
+
+E, cont.) With our (2,1,0) mode, we see that the graph of the standardized residuals look to be just as good as the previous model, as well as the ACF of the residuals looks to be adequate as well. The ACF of residuals graph looks to show slightly less cross correlation than the previous model, which is a good sign. The biggest difference that jumps off the page are the p values for the Ljung-Box statistic. these values are much much better, as they are further above the significant line, and also appear less uniform. Both the ar1 and ar2 coefficients for the model are still statistically significant, which checks off yet another box. The AIC value for this model is 3.476962 and the BIC value is 3.557605. Both of these values are slightly lower than the values for the previous model, even if just slightly so. We have decided upon the (2,1,0) model for the sales data.
+
+##PART B
+```{r}
+library(astsa)
+library(xts)
+diff.sales <- diff(sales)
+diff.lead <- diff(lead)
+ccf(diff.lead, diff.sales)
+lag2.plot(diff.lead, diff.sales, max.lag=8)
+```
+
+As we can see in the first graph of the cross correlation function, there is a massive spike in correlation between the values of sales(t) and leads(t-3). This spike in correlation is even greater in absolute value than the one that occurs at (t, t-2). Shifting over to the lag2.plot, we can see that the lag plot of (t, t-3) has a correlation coefficient of +0.72. This is very large in absolutely value and has a strong upwards trajectory. We can argue that a regression of sales(t) on leads(t-3) is appropriate because since the cross correlation between the sales(t) and leads(t-3) values are high, the leads(t-3) values may be a good predictor of the sales(t) values, as opposed to the leads(t) values. Practically, a change in business wouldn't have an effect on the sales in the same time period, but would likely require time to have an effect, so this makes sense.
+
+##PART C
+```{r}
+library(astsa)
+sales.lead3 <- ts.intersect(lag(diff(lead), -3), diff(sales, 1))
+lead.new <- sales.lead3[,1]
+sales.new <- sales.lead3[,2]
+plot(sales.lead3)
+```
+
+Here we align the data and create two new sets of the data based off DeltaSales(t) and DeltaLead(t-3).
+
+```{r}
+library(astsa)
+fit.sales <- lm(sales.new~lead.new, na.action = NULL)
+summary(fit.sales)
+acf2(resid(fit.sales))
+```
+
+Here we see on the graph that the ACF appears to be trailing off, which implies an MA(0) component, and the PACF appears to cut off after lag 1, suggesting an AR(1) component to the model.
+
+```{r}
+library(astsa)
+sarima.sales <- sarima(sales.new, 1,0,0, xreg=cbind(lead.new))
+sarima.sales
+sales.resid <- resid(sarima.sales$fit)
+acf2(sales.resid)
+```
+
+Using the method provided in the book for fitting a regression model with autocorrelated errors, using the (1,0,0) model suggested by the ACF and PACF plots, we see that we have arrived at a satisfactory model upon evaluation of charts and p values. The standardized residual plot for this model resembles white noise, as does the ACF of the residuals, without having any significant autocorrelation in the lags. Additionaly, while some of the Ljung-Box statistic p-values are close to the significance line, none of them are statistically significant, and also do not look uniform. Additionally, our ar1 and xreg coefficients are both definitely statistically significant, with large t.values. We can see that in the ACF and PACF after fit that there is not remaining correlation in the residuals, so this is satisfactory, and the model does not need to be changed.
+
+#Problem 2
+```{r}
+library(astsa)
+tsplot(UnempRate)
+acf2(UnempRate)
+```
+
+```{r}
+library(astsa)
+tsplot(diff(UnempRate, 12))
+acf2(diff(UnempRate, 12))
+```
+
+```{r}
+library(astsa)
+tsplot(diff(diff(UnempRate, 12)))
+acf2(diff(diff(UnempRate, 12)))
+```
+
+A) Looking at the original data set, we can see there is possibly a slightly positive upward trend over the long term of the data, and that the data definitely demonstrates a cyclical pattern all the way throughout the course of the data.
+
+B) In order to coutneract the slight upward trend that we see in the data, we are going to difference the data set. After differencing the data set, we see that it now more resembles white noise, especially compared to the original dataset that came before it. While we know that there is a cyclical seasonal pattern within the data, we can address that when fitting the SARIMA model itself.
+
+C) Regarding the ACF, we see that the seasonal part of the ACF cuts off after about 1. The overall trend of data seems to be below the significance line after about lag 2, so we will say that it cuts off after about lag 2. We know the differencing for both the overall and seasonal components will both be of the order one, as that is how we are evaluating our data in order to remove the effect of trend both overall and seasonally. Looking at the PACF, we can see that the seasonal lags appear to trail off over time. On the PACF we can see that the overall PACF lags appear to cut off for the most part below the significance line past about lag 2.
+
+D) The differencing of the data gives us values of d=1 and D=1 right away. Secondly, the identification that the PACF trails off seasonally gives us a value P=0. The lags cutting off overall on the PACF after about lag 2 gives us a value of p=2. However, since this could also be interpreted as cutting off at lag 1 exlcuding the singular spike in correlation, we will try both 1 and 2 for p. I believe that the final value of q will be 2, and for the seasonal part Q, because that cuts off at about 1, will will set Q=1.
+
+```{r}
+unemp.sarima <- sarima(UnempRate,p=1,d=1,q=1,P=0,D=1,Q=1,S=12)
+unemp.sarima
+```
+
+This fit seems to be okay, with some lower Ljung-Box p values, but they do not have a sharply linear pattern. The ACF of the residuals seems to resemble white noise, and the coefficients are all statistically signficiant. This model has an AIC of -0.01891573 and a BIC of 0.003881651. We will now compare this to the model with p=2.
+
+```{r}
+unemp.sarima <- sarima(UnempRate,p=2,d=1,q=1,P=0,D=1,Q=1,S=12)
+unemp.sarima
+```
+
+This is a much drastically better fit, from the improvement in the Ljung-Box p values, to the smaller typical autocorrelation in the ACF of the residuals, all while maintaining the significant coefficients. We will elaborate on this model more in the next section. This model also has lower AIC and BIC values than the previous model as well.
+
+```{r}
+unemp.sarima <- sarima(UnempRate,p=2,d=1,q=1,P=0,D=1,Q=1,S=12)
+unemp.sarima
+sarima.for(UnempRate,p=2,d=1,q=1,P=0,D=1,Q=1,S=12,n.ahead=12)
+```
+
+E) Evaluating the diagnostics for the (2,1,1)x(0,1,1)[12] model gives us valuable insight into the performance of the model. Firstly, looking at the plot of the standardized residuals, we can see that they do rsesemble white noise with a relatively consistent variance, which is satisfactory for our needs. Secondly, the ACF of the residuals, while it does err somewhat close to the significance lines, for the most part resembles white noise and looks good. The p values for the Ljung-Box statistic are all non significant, and do not appear uniform, which is good for our needs. The ar1, ar2, ma1, and sma1 parameters are all very much so statistically significantm with some large t.value in absolute value. It appears we have an appropriate model for the data with which to forecast. Evaluating the forecast of our data, we can see that it does make a sensible forecast for the next 12 months of the unemployment rate, which all falls in line with the rest of our diagnostics. It appears we have a sensible model, and appropriate forecast.
+
+#Problem 3
+```{r}
+library(astsa)
+library(xts)
+tsplot(diff(log(gdp)))
+gdpr <- diff(log(gdp))
+acf2(gdpr)
+```
+
+In order to view the data for the quarterly growth rate for the GDP values, in this case, we are going to take the difference of the log of the values, which will give us the appropriate gfrowth rate with which to evaluate. Looking at the graph of the transformed GDP growth rate values, which we will call gdpr, we see that there is definitely some changing variances over the course of the data set, with some drastic variance spikes throughout. This is one characteristic of a data set appropriate for ARCH/GARcH modeling, so we will continue to evaluate. Looking at the ACF and PACF of our gdpr values, we can see that the ACF appears to cut off after lag 2, and the PACF cuts off after lag 1, suggesting a (1,0,2) model for our fitting. However, the PACF could also be interpreted as tailing off, so we will evaluate both the performances of the (0,0,2) and (1,0,2) models and compare.
+
+```{r}
+gdpr.arima <- sarima(gdpr,0,0,2)
+gdpr.arima
+```
+
+Critiquing our (0,0,2) model we can see that the ACF of the residuals is not necesarily amazing, but decent for our use case, while the p values for the Ljung-Box statistic are rather close to significant, they are not significant and for the most part, not all of them are dangerously close. On a more positive note, our p values for the ma1 and ma2 vlaues are definitely statistically significant. This model has an AIC of -6.636312 and a BIC of -6.58518, which we will note to compare to the other model.
+
+```{r}
+gdpr.arima <- sarima(gdpr,1,0,2)
+gdpr.arima
+```
+
+Looking at the diagnostics for the (1,0,2) model, we can see that the ACF of the residuals is rather similar to the previous model. Upon seeing the Ljung-Box p values however, they are definitively lower than the (0,0,2) model, and also a few of them are statistically significant. This is a big strike against this model compared to the previous one. Additionally, the pvalues for both the ar1 and ma1 coefficients are not statistically significant. This model has an AIC of -6.63568 and a BIC of -6.571764. These values are both slightly higher than the (0,0,2) model as well. All these results point to the fact that (0,0,2) is our favorable model, which matches up with a previous homework assignment using the same data. We will continue with the (0,0,2) model.
+
+
+```{r}
+res.gdpr <- resid(sarima(gdpr,0,0,2, details=FALSE)$fit)
+acf2(res.gdpr^2)
+```
+
+Looking at the squared residuals, we can see that both the ACF and PACF could possibly trail off, but it's not really a plainly obvious evaluation. As a result of this, and according to the evaluation of the ACF and PACF of squared residuals in our book, we will take a look at fitting both the ARCH and GARCH models, as the case could be made for either, and the data appears to be very weakly GARCH possibly. This is a thorough examination to find the best model as well by directly comparing.
+
+```{r}
+library(fGarch)
+summary(gdp.a <- garchFit(~arma(0,2)+garch(1,0), data=gdpr))
+plot(gdp.a, which=3)
+```
+
+Evaluating this ARCH fit, we see that we have some noticably low p values for the Ljung-Box statistics, however we must also consider that they do not appear to be uniformly this low. This ARCH model for gdpr also has all coefficients that are statistically significant, which is a nice positive for this model. We note that this ARCH model has AIC and BIC values of -6.695605 and -6.631689, and we will compare these values to the GARCH fit.
+
+```{r}
+library(fGarch)
+summary(gdp.g <- garchFit(~arma(0,2)+garch(1,1), data=gdpr, cond.dist = "std"))
+plot(gdp.g, which=3)
+```
+
+Looking at the diagnostics of the GARCH model we fit, we can see that the Ljung-Box p values are not all super low (when compared to the ARCH model) and also show just as little of the uniform probabilities, just like the ARCH model. However, while many of the coefficients are statistically significant, one of them still is not. On the other hand the AIC value is -6.851640 and the BIC is -6.762158, which are both pretty notably lower than those of the ARCH model.
+
+The main strike against the GARCH model has one coefficient that is not statistically significant. The Ljung-Box values do not have a single probability that is significant at the 0.05 level, as well as those probabilities being higher and nonuniform for the most part. I view this as a point in the GARCH model's favor. Additionally, the BIC, which punishes for model complexity, has a lower value for the GARCH model, even though it has more coefficients than the ARCH model. This also tends to indicate to me that the GARCH model is a better fit. While one can make the argument for either one, I think that the better Ljung-Box p values and the lower AIC/BIC (accounting for model complexity) provide a fair enough argument against the nonsignificant coefficient to argue that this data shows a "slightly GARCH" characteristic, and I will choose the GARCH model as the final choice, but it still could be argued either way.
+
+
+#Problem 4
+```{r}
+library(astsa)
+ujj=ssm(jj, A=1, alpha=0.01, phi=1, sigw=0.1, sigv=0.1)
+tsplot(jj, col=2, type='o', pch=20, ylab="jj")
+lines(ujj$Xs, col=6, lwd=2)
+xxjj=c(time(ujj$Xs), rev(time(ujj$Xs)))
+yyjj=c(ujj$Xs-2*sqrt(ujj$Ps), rev(ujj$Xs+2*sqrt(ujj$Ps)))
+polygon(xxjj,yyjj,border=8,col=gray(0.6, alpha=0.25))
+```
+
+This graph is of the smoother for the state space model.
+
+```{r}
+tsplot(jj, col=2, type='o', pch=20, ylab="jj")
+lines(ujj$Xf, col=6, lwd=2)
+xxjj=c(time(ujj$Xf), rev(time(ujj$Xf)))
+yyjj=c(ujj$Xf-2*sqrt(ujj$Pf), rev(ujj$Xf+2*sqrt(ujj$Pf)))
+polygon(xxjj,yyjj,border=8,col=gray(0.6, alpha=0.25))
+```
+
+This graph is for the filter for the state space model. Comparing the two, we see that the smoother has a much smoother more defined shape, almost as if it resembles an exponential function. While the smoother does not directly fit the data as well as the filter might, in terms of following the trend exactly, the error bounds are smaller typically, which is a notable difference. The filter appears to "wiggle" around in the data to more closely follow the trend compared to the smoother, but this comes in the result of larger error bounds. When the quarterly earnings start to vary more towards the end of the data set, you can see that the filter moves around more than earlier in the data set, when the points are closer together. The smoother does not move around to compensate for this, but rather just increases the width of the error bounds as the data becomes more spread out.
+
+```{r}
+tsplot(jj)
+tsplot(diff(log(jj)))
+```
+
+The estimated value of phi in this case, approximately 1.0348, tell us that since the xt component represents a random walk with drift equation, that the growth rate of the jj earnings is not stationary. This is because for an autoregressive equation, an absolute value of phi less than one makes the set stationary with finite variance, while in our case the estimated value is slightly larger than one. Random walks with drift are also not stationary. This matches up with the plot of diff(log(jj)) which suggests that the growth rate in earnings on its own is not stationary, due to the changing variance at time along the data.
+
+#Problem 6
+```{r}
+library(astsa)
+library(xts)
+par(mfrow=c(2,1))
+tsplot(oil)
+oilr <- diff(log(oil))
+tsplot(oilr)
+acf2(oilr)
+```
+
+Looking at this oil dataset, we see that the data has a upward trend over much of the data, followed by a sharp dropoff, and then a slight increase again. We can plainly see from this trend over time that the data is not stationary, and will require some sort of differencing transformation to help reduce this trend. We can start off by finding the growth rate by find the difference of the logs of these data points, and plotting that out. Upon graphing of the data, we see that this much more resembles white noise compared to the original data set. We see the massive spikes in variation however, and note that this is a characteristic of a dataset that is typical of GARCH modeling. 
+Looking at the ACF and PACF of the oil growth rate, or oilr, we see that for the most part, the autocorrelation tends to cut off to levels below the significance line after about the first lag, on both graphs. While there are some correlations that are still close to the line later on, for the most part they are distinctly lower than those at the beginning and we can address those in the full model. We will evaluate this data set by building models that are at (1,0,1) and slightly around there, starting from (1,0,0).
+
+```{r}
+library(astsa)
+sarima(oilr, 1,0,0)
+```
+
+This is clearly not a good fit, based off the low and uniform p-values of Ljung-Box statistics and the significant spikes in the ACF of residuals.
+
+```{r}
+library(astsa)
+sarima(oilr,0,0,1)
+```
+
+This is also not a good fit, as it has a similar ACF of residuals and p values for Ljung-Box statistics compared to the (1,0,0) model.
+
+```{r}
+library(astsa)
+sarima(oilr,1,0,1)
+```
+
+This is a little bit of a better fit as we had predicted, due to the higher variation in the p values for the Ljung-Box statistics (albeit with some low p values still) and the better ACF of residuals plot. Additionally, the pvalues for the coefficients are very low. This model also has lower AIC and BIC than the previous two.
+
+```{r}
+library(astsa)
+sarima(oilr,2,0,1)
+```
+
+This model has slightly less variation in the p values for the Ljung-Box statistic, and also has nonsignificant coefficients, as well as being more complicated than the previous model for no gain. We will stop here and accept (1,0,1) as our model.
+
+```{r}
+uoil=resid(sarima(oilr,1,0,1, details=FALSE)$fit)
+acf2(uoil^2)
+```
+
+Upon fitting our (1,0,1) model and examining the squared residuals of such a fit, we see that the ACF and PACF are both clearly trailing off, indicating that this is ripe for a GARCH model, as previously had been explained in our textbook. We will still compare to ARCH model to exhaust options, and demonstrate that GARCH is definitively a better fit in a case like this.
+
+```{r}
+library(fGarch)
+summary(oil.a <- garchFit(~arma(1,1)+garch(1,0), data=oilr))
+plot(oil.a, which=3)
+```
+
+Looking at the results of this ARCH fit, we see that we have some dangerously low p values for the Ljung-Box statistics, although notably they do not appear to be uniform. This ARCH model also has a nonsignificant coefficient as well, which is another red flag that this is not an adequate fit. We will see that this ARCH model has AIC and BIC values of -3.363096 and -3.323583 respectively, noting these in order to compare to the GARCH model.
+
+```{r}
+summary(oil.g <- garchFit(~arma(1,1)+garch(1,1), data=oilr, cond.dist = "std"))
+plot(oil.g, which=3)
+```
+
+After developing our GARCH model, we see that none of the Ljung-Box p values are as dangerously low, as well as not being uniform which is an improvement from the ARCH model. Additionally, all the coefficients in this case are statistically significant. Lastly, we have an AIC value of -3.463824 and a BIC value of -3.408506, which are both noticably lower than the ARCH model, which is the last and final improvement. As we can see, this GARCH model is the more appropriate fit, as indicated by the squared residual plot from the original (1,0,1) fit. We have settled on ARMA(1,1)+GARCH(1,1) as the final model for this data.
+

@@ -1,0 +1,335 @@
+---
+title: "STAT 1361 Homework 7"
+author: "Jackson Hardin"
+date: "April 5, 2019"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##ISLR Chapter 8 Applied Exercise 7
+```{r}
+library(MASS)
+library(randomForest)
+set.seed(0)
+train <- sample(1:nrow(Boston), nrow(Boston)/2)
+boston.train <- Boston[train, -14]
+boston.test <- Boston[-train, -14]
+y.train <- Boston[train, 14]
+y.test <- Boston[-train, 14]
+```
+
+```{r}
+bostonrf4 <- randomForest(boston.train, y = y.train, xtest = boston.test, ytest = y.test, mtry = 4, ntree = 500)
+```
+
+```{r}
+bostonrf7 <- randomForest(boston.train, y = y.train, xtest = boston.test, ytest = y.test, mtry = 7, ntree = 500)
+```
+
+```{r}
+bostonrf10 <- randomForest(boston.train, y = y.train, xtest = boston.test, ytest = y.test, mtry = 10, ntree = 500)
+```
+
+```{r}
+plot(1:500, bostonrf4$test$mse, col = "blue", type = "l", xlab = "Number of Trees", ylab = "Test MSE", ylim = c(8, 18))
+lines(1:500, bostonrf7$test$mse, col = "red", type = "l")
+lines(1:500, bostonrf10$test$mse, col = "green", type = "l")
+legend("topright", c("m = 4", "m = 7", "m = 10"), col = c("blue", "red", "green"), cex = 1, lty = 1)
+```
+
+One can see while looking at the plot of various values of mtry and number of trees that typically, as the amount of trees increases, the calculated MSE starts to stabilize and plateau, and as the value of mtry increase the lower the level of MSE, in a general sense.
+
+
+
+##ISLR Chapter 8 Applied Exercise 8
+```{r}
+library(ISLR)
+set.seed(0)
+train <- sample(1:nrow(Carseats), nrow(Carseats)/2)
+seats.train <- Carseats[train,]
+seats.test <- Carseats[-train,]
+```
+
+a) above is the code for part a
+
+
+```{r}
+set.seed(0)
+library(tree)
+seatsreg.tree <- tree(Sales~., data=seats.train)
+summary(seatsreg.tree)
+plot(seatsreg.tree)
+text(seatsreg.tree, pretty=0)
+seatsreg.predict <- predict(seatsreg.tree, seats.test)
+mean((seatsreg.predict-seats.test$Sales)^2)
+```
+
+b) While the tree is somewhat hard to read, we can figure that the regression tree only uses seven of the total amount of the variables in the training set. The first major split is amongst ShelveLoc, and following that split by Price. Following the Price split towards the top of the tree, the regression tree tends to fine tune the values by repeatedly splitting at different points amongst age, population, price, income, and compprice. The calculated MSE in this case is 4.477452
+
+
+```{r}
+set.seed(0)
+seatsregcv.tree <- cv.tree(seatsreg.tree)
+plot(seatsregcv.tree)
+```
+
+```{r}
+set.seed(0)
+seatsregprune.tree <- prune.tree(seatsreg.tree, best=8)
+plot(seatsregprune.tree)
+text(seatsregprune.tree, pretty=0)
+```
+
+```{r}
+set.seed(0)
+seatsregprune.pred <- predict(seatsregprune.tree, seats.test)
+mean((seatsregprune.pred-seats.test$Sales)^2)
+```
+
+c) Pruning this regression tree does not increase the test MSE, it actually increases it from 4.477452 to 5.077223. This is due to the increasing bias as a result of reducing the variance by pruning the tree.
+
+
+```{r}
+set.seed(0)
+seatsbagged <- randomForest(Sales~., data=seats.train, mtry=10, ntree=500, importance=TRUE)
+seatsbagged.pred <- predict(seatsbagged, seats.test)
+mean((seatsbagged.pred-seats.test$Sales)^2)
+importance(seatsbagged)
+```
+
+d) We calculated a test MSE of 2.883367. Using the imprtance() function, we can see that Price, ShelveLoc, and CompPrice are three most important variables.
+
+
+```{r}
+set.seed(0)
+mse <- c()
+for(i in 3:10){
+  seatsrf=randomForest(Sales~.,data=seats.train, mtry=i, ntree=500, importance=TRUE)
+  seatsrf.pred=predict(seatsrf, seats.test)
+  mse=rbind(mse,mean((seatsrf.pred-seats.test$Sales)^2))
+}
+plot(3:10,mse,type='b')
+mse
+importance(seatsrf)
+```
+
+e) As mtry, or the number of variables considered at each split, increase, typically the MSE decreases, with some small exceptions.
+
+
+
+##ISLR Chapter 8 Applied Exercise 10
+```{r}
+set.seed(0)
+Hitters <- na.omit(Hitters)
+Hitters$Salary <- log(Hitters$Salary)
+```
+
+a) above is the code for part a
+
+
+```{r}
+set.seed(0)
+train <- 1:200
+hitters.train <- Hitters[train,]
+hitters.test <- Hitters[-train,]
+```
+
+b) above is the code for part b
+
+
+```{r}
+library(gbm)
+set.seed(0)
+lambdas <- seq(0,0.6, by=0.01)
+boost.error <- rep(NA, length(lambdas))
+for (i in 1:length(lambdas)) {
+    hittersboost <- gbm(Salary~., data = hitters.train, distribution = "gaussian", n.trees = 1000, shrinkage = lambdas[i])
+    hittersboost.pred <- predict(hittersboost, hitters.train, n.trees = 1000)
+    boost.error[i] <- mean((hittersboost.pred-hitters.train$Salary)^2)
+}
+plot(lambdas, boost.error, type = "b", xlab = "shrinkage values/lambda", ylab = "train MSE")
+```
+
+c) above is the code for part c
+
+
+```{r}
+set.seed(0)
+boosttest.error <- rep(NA, length(lambdas))
+for (i in 1:length(lambdas)) {
+    hittersboost.test <- gbm(Salary~., data = hitters.train, distribution = "gaussian", n.trees = 1000, shrinkage = lambdas[i])
+    hittersboosttest.pred <- predict(hittersboost.test, hitters.test, n.trees = 1000)
+    boosttest.error[i] <- mean((hittersboosttest.pred-hitters.test$Salary)^2)
+}
+plot(lambdas, boosttest.error, type = "b", xlab = "shrinkage values/lambda", ylab = "test MSE")
+min(boosttest.error)
+lambdas[which.min(boosttest.error)]
+```
+
+d) above is the code for part d
+
+
+```{r}
+set.seed(0)
+library(glmnet)
+hitterfit1 <- lm(Salary~., data=hitters.train)
+hitterfit1.pred <- predict(hitterfit1, hitters.test)
+mean((hitterfit1.pred-hitters.test$Salary)^2)
+```
+
+```{r}
+set.seed(0)
+hitterridgex <- model.matrix(Salary~., data=hitters.train)
+hitterridgex.test <- model.matrix(Salary~., data=hitters.test)
+hitterridgey <- hitters.train$Salary
+hitterfit2 <- glmnet(hitterridgex, hitterridgey, alpha = 0)
+hitterfit2.pred <- predict(hitterfit2, s = 0.01, newx = hitterridgex.test)
+mean((hitterfit2.pred-hitters.test$Salary)^2)
+```
+
+e) The lowest value of test MSE for the boosted model, which is 0.2610105 for a lambda value of 0.08, is lower than the test MSE for both OLS regression and ridge regression.
+
+
+```{r}
+set.seed(0)
+library(gbm)
+hittersboost.final <- gbm(Salary~., data=hitters.train, distribution="gaussian", n.trees=1000, shrinkage=lambdas[which.min(boosttest.error)])
+summary(hittersboost.final)
+```
+
+f) We can see in the final table that CAtBat has the highest relative influence by a decent margin.
+
+
+```{r}
+set.seed(0)
+hittersbagged <- randomForest(Salary~., data =hitters.train, mtry = 19, ntree = 500)
+hittersbagged.pred <- predict(hittersbagged, hitters.test)
+mean((hittersbagged.pred-hitters.test$Salary)^2)
+```
+
+g) The test MSE for the bagged model of the Hitters data set is 0.2304067, which lower than the MSE for boosting, OLS regression, and ridge regression.
+
+
+
+##Homework Problem 4
+
+a) Since the regression tree takes the average instead of a majority vote like the classification tree, if the response variables of 0 and 1 are unevenly balanced, the classification tree will skew the predicted values in comparison to the regression tree.
+
+
+```{r}
+library(rpart)
+set.seed(0)
+x1 = runif(500, 0, 1)
+x2 = runif(500, 0, 1)
+x3 = runif(500, 0, 1)
+x4 = runif(500, 0, 1)
+x5 = runif(500, 0, 1)
+y = c(rep(1,450), rep(0, 50))
+dt = data.frame(y,x1,x2,x3,x4,x5)
+regtree = rpart(y~., data=dt, method="anova")
+#summary(regtree)
+#plot(regtree)
+#text(regtree)
+pred = round(predict(regtree, class="anova"))
+length(which(pred != y))
+```
+
+```{r}
+library(rpart)
+set.seed(0)
+classtree = rpart(y~., data=dt, method="class", parms=list(prior=c(0.99, 0.01)))
+#summary(classtree)
+#plot(classtree)
+#text(classtree)
+pred = predict(classtree, class="class", type="class")
+length(which(pred != y))
+```
+
+b) The regression tree approach is perferable in this case due to the uneven distribution of the response variable between 0s and 1s.
+
+
+
+##Homework Problem 5
+```{r}
+set.seed(0)
+df.train <- read.csv("C:/Users/JAH317/Downloads/HW7train.csv", header=TRUE)
+train <- 1:900
+df.training <- df.train[train,]
+df.testing <- df.train[-train,]
+```
+
+a) above is the code for part a
+
+
+```{r}
+set.seed(0)
+rf <- randomForest(y~., data=df.training, mtry=8, ntree=500, importance=TRUE)
+importance(rf)
+```
+
+```{r}
+set.seed(0)
+par(mfrow=c(3,1))
+plot(rf$importance[,1],type="b",axes=F,ann=F,ylim=c(0,max(rf$importance[,1])+1))
+axis(1,at=1:10,lab=names(df.train)[-1])
+axis(2,at=seq(0,max(rf$importance)+1,0.25),las=1)
+box()
+```
+
+b) Both the table and plot suggest that X1 and X2 are more important than the other predictors.
+
+
+```{r}
+library(dplyr)
+set.seed(0)
+mse.perm <- c()
+df.loop <- df.training
+
+for(i in 1:10){
+  df.loop <- df.training
+  df.loop[,i+1] <- sample(df.training[,i+1])
+  dfrf <- randomForest(y~., data=df.loop, mtry=8, ntree=500, importance=TRUE)
+  dfrf.pred <- predict(dfrf, df.testing)
+  mse.perm <- rbind(mse.perm, mean((dfrf.pred-df.testing$y)^2))
+}
+```
+
+```{r}
+plot(mse.perm,type="b",axes=F,ann=F,ylim=c(0,max(mse.perm)+1))
+axis(1,at=1:10,lab=names(df.train)[-1])
+axis(2,at=seq(0, max(mse.perm)+1, 5),las=1)
+box()
+```
+
+c) X1 and X2 do not look more important than the other variables, like they did in the first plot. Now all the variables look to have approximately the same importance.
+
+
+```{r}
+set.seed(0)
+mse.loo <- c()
+for(i in 1:10){
+  dfrf <- randomForest(y~., data=df.training[,-(i+1)], mtry=8, ntree=500, importance=TRUE)
+  dfrf.pred <- predict(dfrf, df.testing)
+  mse.loo <- rbind(mse.loo, mean((dfrf.pred-df.testing$y)^2))
+}
+```
+
+```{r}
+plot(mse.loo[,1],type='b',axes=F,ann=F,ylim=c(0,max(mse.loo[,1])+1))
+axis(1,at=1:10,lab=names(mse.perm)[-1])
+axis(2,at=seq(0,max(mse.loo)+1, 0.25), las=1)
+box()
+```
+
+d) This plot of the test MSE looks like the plot of part (c). I would trust the original plot in part (b), even though in that plot X1 and X2 look to be much more important than the other variables along with the fact that out of the box random forest importance measures are known to be possibly skewed. To me, this is because when you perform permutation tests and delete the variables, you are purposely breaking the relationship between the predictors and the response. Since the high importance of X1 and X2 show up in the original plot, but not in the permutation test plot, this suggests that there truly is something special about X1 and X2 importance-wise.
+
+```{r}
+cor(df.train)
+```
+
+e) It looks like X1 and X2 are more correlated with the response than the rest of the predictor variables. This shows up in the original plot where X1 and X2 are much higher than the rest of the variables on the plot. This does not show up in the permutation test plot however, because you are intentionally breaking that correlation by scrambling the values. However, the fact that the importance does not show up after the permutation test suggests that there truly is a correlation between X1 and X2 and Y, when compared to the rest of the predictor variables.

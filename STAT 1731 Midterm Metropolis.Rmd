@@ -1,0 +1,40 @@
+---
+title: "STAT 1731 Midterm Metropolis"
+author: "Jackson Hardin"
+date: "2/23/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+set.seed(100)
+poisson.mh = function(lambda, x0, num, burnin=500){
+n = num+burnin
+x = c()
+i = x0
+for(k in 1:n){
+u1 = runif(1)
+j = if(u1<.5){ ifelse(i==0, i, i-1)} else { i+1 }
+P = switch(i+2-j, lambda/j, 1, i/lambda)
+u2 = runif(1)
+new = if(P >=1)j else { if(u2<P)j else i}
+i = new
+x[k] = i
+}
+return(x[-(1:burnin)])
+}
+```
+
+```{r}
+set.seed(100)
+x = poisson.mh(lambda=5, x0=4, num=6000)
+y = table(x)
+barplot(y/2000)
+lines(dpois(0:15,5), col=2, lwd=2)
+mean(x); var(x)
+```
